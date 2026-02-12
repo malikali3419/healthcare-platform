@@ -19,7 +19,7 @@ awslocal secretsmanager create-secret \
 awslocal secretsmanager create-secret \
   --name healthcare/youtube \
   --secret-string '{
-    "api_key": "YOUR_YOUTUBE_API_KEY"
+    "api_key": "YOUTUBE_API_KEY"
   }' || true
 
 echo "LocalStack initialization complete."

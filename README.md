@@ -6,28 +6,29 @@ A secure, cloud-native healthcare backend built with AWS serverless architecture
 
 ```
 Client
-  │
-  ▼
-API Gateway (HTTP APIs)
-  │
-  ▼
-Lambda Functions (Python)
-  │
-  ├──▶ PostgreSQL (RDS / local Docker)
-  ├──▶ AWS Secrets Manager
-  ├──▶ CloudWatch Logs
-  └──▶ YouTube Data API v3
+  |
+  v
+API Gateway (REST API)
+  |
+  v
+Lambda Functions (Python 3.12)
+  |
+  |-->  PostgreSQL (Docker)
+  |-->  AWS Secrets Manager
+  |-->  CloudWatch Logs
+  '-->  YouTube Data API v3
 ```
 
 ## Tech Stack
 
 | Layer       | Technology                              |
 |-------------|------------------------------------------|
-| API Layer   | AWS API Gateway (HTTP APIs)              |
-| Compute     | AWS Lambda (Python 3.11)                 |
+| API Layer   | AWS API Gateway (REST API)               |
+| Compute     | AWS Lambda (Python 3.12)                 |
 | Database    | PostgreSQL 15                            |
 | Secrets     | AWS Secrets Manager                      |
 | Logging     | AWS CloudWatch (structured JSON)         |
+| Docs        | Swagger UI (OpenAPI 3.0)                 |
 | Local Dev   | LocalStack + Docker Compose              |
 
 ## Project Structure
@@ -48,9 +49,12 @@ healthcare-platform/
 │   ├── cache.py         # In-memory TTL cache
 │   └── responses.py     # Standardized API response helpers
 ├── schema/
-│   └── schema.sql       # Database DDL
+│   ├── schema.sql       # Database DDL
+│   └── swagger.json     # OpenAPI 3.0 specification
 ├── infra/localstack/
 │   ├── docker-compose.yml
+│   ├── deploy.sh        # Lambda + API Gateway deployment script
+│   ├── test_apis.sh     # End-to-end API test script
 │   └── init.sh          # Auto-provisions secrets on startup
 ├── requirements.txt
 └── README.md
@@ -84,6 +88,7 @@ docker compose up -d
 This starts:
 - **LocalStack** on port 4566 (API Gateway, Lambda, Secrets Manager, CloudWatch)
 - **PostgreSQL** on port 5432 (auto-runs schema.sql)
+- **Swagger UI** on port 8080 (interactive API documentation)
 
 Secrets are auto-provisioned via `init.sh`.
 
@@ -93,17 +98,95 @@ Secrets are auto-provisioned via `init.sh`.
 pip install -r requirements.txt
 ```
 
-### 3. Set environment
+### 3. Deploy Lambdas & API Gateway
 
 ```bash
-export ENV=local
+cd infra/localstack
+bash deploy.sh
 ```
 
-### 4. Verify secrets
+This packages all Lambda functions (with Linux-targeted dependencies), creates them in LocalStack, sets up API Gateway with all routes and CORS support, and deploys to a `local` stage.
+
+### 4. Run end-to-end tests
+
+```bash
+cd infra/localstack
+bash test_apis.sh
+```
+
+This registers a test patient, seeds test data, and hits all 5 API endpoints.
+
+### 5. Verify secrets
 
 ```bash
 aws --endpoint-url=http://localhost:4566 secretsmanager get-secret-value \
   --secret-id healthcare/db --query SecretString --output text
+```
+
+## Swagger UI
+
+Interactive API documentation is available via Swagger UI at:
+
+```
+http://localhost:8080
+```
+
+Swagger UI is automatically started as part of `docker compose up -d`. It reads the OpenAPI 3.0 spec from `schema/swagger.json`.
+
+To use Swagger UI with your deployed API:
+1. Open http://localhost:8080 in your browser
+2. Update the `apiId` server variable with the API ID from `deploy.sh` output
+3. Use the "Try it out" button on any endpoint to send requests
+
+## Database Schema
+
+### Tables
+
+| Table | Description |
+|-------|-------------|
+| `patients` | Registered patients (id, first_name, last_name, dob, email, phone) |
+| `appointments` | Patient appointments (id, patient_id, provider_name, appointment_time, status) |
+| `provider_notes` | Doctor notes per appointment (id, appointment_id, doctor_id, notes) |
+| `prescriptions` | Patient prescriptions (id, patient_id, medication, dosage, status) |
+
+### Seeding Test Data (Appointments & Prescriptions)
+
+Since the assignment spec does not include create endpoints for appointments and prescriptions, these records are inserted directly into the database via SQL.
+
+Connect to the database:
+
+```bash
+docker exec -it healthcare-postgres psql -U postgres -d healthcare
+```
+
+#### Insert an appointment
+
+```sql
+INSERT INTO appointments (patient_id, provider_name, appointment_time, status)
+VALUES ('<PATIENT_ID>', 'Dr. Adams', NOW() + INTERVAL '7 days', 'scheduled');
+```
+
+#### Insert a prescription
+
+```sql
+INSERT INTO prescriptions (patient_id, medication, dosage, status)
+VALUES ('<PATIENT_ID>', 'Metformin', '500mg twice daily', 'active');
+```
+
+## CloudWatch Logs
+
+View Lambda logs via LocalStack:
+
+```bash
+# List log groups
+aws --endpoint-url=http://localhost:4566 logs describe-log-groups
+
+# View logs for a specific Lambda
+aws --endpoint-url=http://localhost:4566 logs describe-log-streams \
+  --log-group-name /aws/lambda/register_patient
+
+# Tail real-time logs from LocalStack container
+docker logs -f healthcare-localstack
 ```
 
 ## Security & Compliance
@@ -152,7 +235,8 @@ All errors follow a standard format:
 
 ## Caching
 
-- **Local/Lambda**: In-memory cache with 1-hour TTL
+- **Education Videos**: In-memory cache with 1-hour TTL to reduce YouTube API calls
+- The response includes a `"source"` field (`"youtube"` or `"cache"`) indicating the data origin
 - **Production**: Recommended to use ElastiCache (Redis) or DynamoDB with TTL
 
 ## Environments
@@ -160,5 +244,3 @@ All errors follow a standard format:
 | Environment | Purpose | Config |
 |-------------|---------|--------|
 | `local` | Development (LocalStack) | `ENV=local` |
-| `staging` | Pre-production testing | `ENV=staging` |
-| `prod` | Live environment | `ENV=prod` |

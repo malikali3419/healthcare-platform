@@ -1,0 +1,48 @@
+Healthcare Platform — Architecture Diagram
+============================================
+
+                    ┌──────────┐
+                    │  Client  │
+                    └────┬─────┘
+                         │ HTTPS
+                         ▼
+                ┌─────────────────┐
+                │   API Gateway   │
+                │  (HTTP APIs)    │
+                └────────┬────────┘
+                         │
+         ┌───────────────┼───────────────────┐
+         │               │                   │
+         ▼               ▼                   ▼
+   ┌───────────┐  ┌───────────────┐  ┌─────────────────┐
+   │ register  │  │ appointments  │  │ prescriptions   │
+   │ _patient  │  │ /notes upload │  │ /edu_videos     │
+   └─────┬─────┘  └──────┬────────┘  └───────┬─────────┘
+         │               │                   │
+         └───────────────┼───────────────────┘
+                         │
+              ┌──────────┼──────────┐
+              │          │          │
+              ▼          ▼          ▼
+    ┌──────────────┐ ┌────────┐ ┌───────────────┐
+    │   Secrets    │ │  RDS   │ │  CloudWatch   │
+    │   Manager    │ │ Postgres│ │    Logs       │
+    └──────────────┘ └────────┘ └───────────────┘
+
+              education_videos Lambda
+                     │
+                     ▼
+            ┌─────────────────┐
+            │  YouTube Data   │
+            │   API v3        │
+            └─────────────────┘
+
+
+Data Flow
+---------
+1. Client sends HTTP request → API Gateway
+2. API Gateway routes to the appropriate Lambda function
+3. Lambda retrieves DB credentials from Secrets Manager
+4. Lambda queries/writes to PostgreSQL (RDS)
+5. Lambda emits structured JSON logs to CloudWatch
+6. education_videos Lambda also calls YouTube API (cached, 1h TTL)

@@ -1,0 +1,358 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Healthcare Platform API",
+    "description": "Secure, cloud-native healthcare backend API for managing patients, appointments, provider notes, prescriptions, and health education videos.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4566/restapis/{apiId}/local/_user_request_",
+      "description": "LocalStack (local development)",
+      "variables": {
+        "apiId": {
+          "default": "REPLACE_WITH_API_ID",
+          "description": "API Gateway REST API ID from deploy.sh output"
+        }
+      }
+    }
+  ],
+  "paths": {
+    "/patients/register": {
+      "post": {
+        "summary": "Register a new patient",
+        "operationId": "registerPatient",
+        "tags": ["Patients"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatientRegistrationRequest" },
+              "example": {
+                "first_name": "Jane",
+                "last_name": "Smith",
+                "dob": "1985-03-20",
+                "email": "jane.smith@example.com",
+                "phone": "555-0199"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Patient registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "patient_id": { "type": "string", "format": "uuid" },
+                        "created_at": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "error": { "code": "VALIDATION_ERROR", "message": "Invalid input" }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate email",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "error": { "code": "DUPLICATE_EMAIL", "message": "A patient with this email already exists" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/patients/{patient_id}/appointments/upcoming": {
+      "get": {
+        "summary": "Get upcoming appointments for a patient",
+        "operationId": "getUpcomingAppointments",
+        "tags": ["Appointments"],
+        "parameters": [
+          {
+            "name": "patient_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of upcoming appointments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "appointments": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Appointment" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/appointments/{appointment_id}/notes": {
+      "post": {
+        "summary": "Upload provider notes for an appointment",
+        "operationId": "uploadProviderNotes",
+        "tags": ["Provider Notes"],
+        "parameters": [
+          {
+            "name": "appointment_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProviderNoteRequest" },
+              "example": {
+                "doctor_id": "d1234567-abcd-abcd-abcd-123456789abc",
+                "notes": "Patient reports improved blood sugar levels."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Note uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "note_id": { "type": "string", "format": "uuid" },
+                        "created_at": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Appointment not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/patients/{patient_id}/prescriptions": {
+      "get": {
+        "summary": "List prescriptions for a patient",
+        "operationId": "listPrescriptions",
+        "tags": ["Prescriptions"],
+        "parameters": [
+          {
+            "name": "patient_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["active", "past"]
+            },
+            "description": "Filter by prescription status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of prescriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "prescriptions": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Prescription" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/patients/{patient_id}/education-videos": {
+      "get": {
+        "summary": "Get health education video recommendations",
+        "operationId": "getEducationVideos",
+        "tags": ["Education"],
+        "parameters": [
+          {
+            "name": "patient_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of education videos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "videos": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Video" }
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": ["youtube", "cache"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "YouTube API error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PatientRegistrationRequest": {
+        "type": "object",
+        "required": ["first_name", "last_name", "dob", "email"],
+        "properties": {
+          "first_name": { "type": "string", "minLength": 1 },
+          "last_name": { "type": "string", "minLength": 1 },
+          "dob": { "type": "string", "format": "date" },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": "string" }
+        }
+      },
+      "ProviderNoteRequest": {
+        "type": "object",
+        "required": ["doctor_id", "notes"],
+        "properties": {
+          "doctor_id": { "type": "string", "format": "uuid" },
+          "notes": { "type": "string", "minLength": 1 }
+        }
+      },
+      "Appointment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "provider_name": { "type": "string" },
+          "appointment_time": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] }
+        }
+      },
+      "Prescription": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "medication": { "type": "string" },
+          "dosage": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "past"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Video": {
+        "type": "object",
+        "properties": {
+          "video_id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "url": { "type": "string", "format": "uri" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: healthcare-localstack
+    ports:
+      - "4566:4566"       # LocalStack Gateway
+      - "4510-4559:4510-4559"  # Service port range
+    environment:
+      - SERVICES=secretsmanager,lambda,apigateway,logs
+      - DEBUG=0
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DISABLE_CORS_CHECKS=1
+      - EXTRA_CORS_ALLOWED_ORIGINS=http://localhost:8080
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./init.sh:/etc/localstack/init/ready.d/init.sh"
+    networks:
+      - healthcare-net
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: healthcare-swagger
+    ports:
+      - "8080:8080"
+    environment:
+      SWAGGER_JSON: /spec/swagger.json
+    volumes:
+      - "../../schema/swagger.json:/spec/swagger.json:ro"
+    networks:
+      - healthcare-net
+
+  postgres:
+    image: postgres:15
+    container_name: healthcare-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: healthcare
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - "../../schema/schema.sql:/docker-entrypoint-initdb.d/schema.sql"
+    networks:
+      - healthcare-net
+
+volumes:
+  pgdata:
+
+networks:
+  healthcare-net:
+    driver: bridge
